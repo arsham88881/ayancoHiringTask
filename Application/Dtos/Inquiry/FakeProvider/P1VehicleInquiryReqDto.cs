@@ -6,6 +6,9 @@ namespace Application.Dtos.Inquiry.FakeProvider;
 
 public class P1VehicleInquiryReqDto
 {
+    public string? PlateNumber { get; set; }
+    public string? Password { get; set; }
+    public string? Username { get; set; }
 }
 
 
