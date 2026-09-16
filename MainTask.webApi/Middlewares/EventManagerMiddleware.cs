@@ -27,12 +27,14 @@ public class EventManagerMiddleware
         this.next = next;
     }
 
-    public async Task InvokeAsync(HttpContext context, IEventManagerContext eventManager)
+    public async Task InvokeAsync(HttpContext context, ILogger<EventManagerMiddleware> logger, IEventManagerContext eventManager)
     {
         var stopwatch = Stopwatch.StartNew();
         var requestTime = DateTime.Now;
-        context.Request.EnableBuffering();
         eventManager.GenerateEventGUID();
+        logger.LogInformation("request com with this tracking Id {0}", eventManager.EventGuid.ToString());
+        context.Request.EnableBuffering();
+
         var SaveEventParam = new SaveEventInModel();
         try
         {
@@ -41,7 +43,7 @@ public class EventManagerMiddleware
             stopwatch.Stop();
 
             var statusCode = context!.Response.StatusCode;
-
+            SaveEventParam.Guid = eventManager.EventGuid;
             SaveEventParam.StartDate = requestTime;
             SaveEventParam.Duration = stopwatch.Elapsed.Milliseconds;
             SaveEventParam.Source = context.Request.Path.Value;

@@ -1,3 +1,5 @@
+using Application;
+using Infrastructure;
 using MainTask.webApi.Configures;
 using MainTask.webApi.Middlewares;
 
@@ -7,6 +9,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers().AddConfigureApiBehavior();
 builder.Services.AddSwaggerGen();
+builder.Services.AddDiInfrastructure();
+builder.Services.AddDiApplication();
 builder.AddLoggingBuildConfigure();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
