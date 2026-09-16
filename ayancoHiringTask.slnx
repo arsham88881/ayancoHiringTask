@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/Main/">
+    <Project Path="Application/Application.csproj" Id="83f5ab63-d362-4bc0-8dd8-14e0144226cf" />
+    <Project Path="Domain/Domain.csproj" Id="ea6480d7-5764-498e-a50c-acc627ef43d6" />
+    <Project Path="Infrastructure/Infrastructure.csproj" Id="e762a2f4-5935-4953-a84d-4f28b5df00b8" />
+  </Folder>
+  <Folder Name="/Presentation/">
+    <Project Path="FakeProviders.webApi/FakeProviders.webApi.csproj" Id="ba1578f5-8078-4fd3-894f-3990bfcb59ef" />
+    <Project Path="MainTask.webApi/MainTask.webApi.csproj" Id="24428ee8-90e0-4c8d-b299-9e420ef77206" />
+  </Folder>
+</Solution>

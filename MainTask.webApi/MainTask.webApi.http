@@ -1,0 +1,6 @@
+@MainTask.webApi_HostAddress = http://localhost:5142
+
+GET {{MainTask.webApi_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
