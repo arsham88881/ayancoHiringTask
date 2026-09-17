@@ -8,11 +8,11 @@ using RestSharp;
 
 namespace Infrastructure.Integration.Factories.Inquriy;
 
-public class Provider1VehicleViolation : IInquiryVehicleViolation
+public class Provider3VehicleViolation : IInquiryVehicleViolation
 {
     private readonly IHttpIntegrationContext _httpIntegrationContext;
 
-    public Provider1VehicleViolation(
+    public Provider3VehicleViolation(
         IHttpIntegrationContext httpIntegrationContext)
     {
         _httpIntegrationContext = httpIntegrationContext;
@@ -37,7 +37,7 @@ public class Provider1VehicleViolation : IInquiryVehicleViolation
 
         var restRequest = new RestRequestDto
         {
-            EndPoint = "1/vehicle-violations/inquiry",
+            EndPoint = "3/vehicle-violations/inquiry",
             BodyParams = request
         };
 
@@ -48,7 +48,7 @@ public class Provider1VehicleViolation : IInquiryVehicleViolation
             RetryCount = retryAttempt
         };
 
-        var response = await _httpIntegrationContext.PostAsync<Provider1Response>(
+        var response = await _httpIntegrationContext.PostAsync<Provider3Response>(
             baseUrlAddress: provider.Address,
             request: restRequest,
             options: options,
@@ -122,15 +122,15 @@ public class Provider1VehicleViolation : IInquiryVehicleViolation
     }
 
     // ========== مدل‌های پاسخ Provider1 ==========
-    private class Provider1Response
+    private class Provider3Response
     {
         public bool Success { get; set; }
         public string? Provider { get; set; }
         public string? Message { get; set; }
-        public Provider1Data? Data { get; set; }
+        public Provider3Data? Data { get; set; }
     }
 
-    private class Provider1Data
+    private class Provider3Data
     {
         public string? PlateNumber { get; set; }
         public long? TotalAmount { get; set; }

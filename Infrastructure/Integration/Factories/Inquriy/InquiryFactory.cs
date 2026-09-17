@@ -15,10 +15,10 @@ internal class InquiryFactory : IInquiryFactory
         registerdProviders = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
             ["Provider1"] = typeof(Provider1VehicleViolation),
-            //["Provider2"] = typeof(Provider2VehicleViolation),
-            //["Provider3"] = typeof(Provider3VehicleViolation),
-            //["Provider4"] = typeof(Provider4VehicleViolation),
-            //["Provider5"] = typeof(Provider5VehicleViolation)
+            ["Provider2"] = typeof(Provider2VehicleViolation),
+            ["Provider3"] = typeof(Provider3VehicleViolation),
+            ["Provider4"] = typeof(Provider4VehicleViolation),
+            ["Provider5"] = typeof(Provider5VehicleViolation)
         };
     }
 

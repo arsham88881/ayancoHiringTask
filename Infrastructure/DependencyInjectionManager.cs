@@ -1,8 +1,11 @@
-﻿using Domain.Interfaces.Contexts;
+﻿using Application.Interfaces.Strategies;
+using Domain.Interfaces.Contexts;
 using Domain.Interfaces.Repositories.Audit;
 using Domain.Interfaces.Repositories.Inquriy;
 using Domain.Interfaces.Services;
 using Infrastructure.DataIo.Services;
+using Infrastructure.Integration.Contexts;
+using Infrastructure.Integration.Factories.Inquriy;
 using Infrastructure.Persistence.Contexts;
 using Infrastructure.Persistence.Repositories;
 using Infrastructure.Security.Contexts;
@@ -21,11 +24,24 @@ public static class DependencyInjectionManager
         services.AddTransient<IFileStorageService, FileStorageService>();
         services.AddTransient<IFileReaderService, FileReaderService>();
         services.AddTransient<IExceptionLogService, ExceptionLogService>();
+        services.AddTransient<IHttpIntegrationContext, HttpIntegrationContext>();
 
 
         //repositories
         services.AddScoped<IAuditRepository, AuditRepository>();
         services.AddScoped<IInquiryProviderRepository, InquiryProviderRepository>();
+        services.AddScoped<IInquiryVehicleViolationRepository, InquiryVehicleViolationRepository>();
+
+
+        //factories
+        services.AddScoped<IInquiryFactory, InquiryFactory>();
+        services.AddScoped<Provider1VehicleViolation>();
+        services.AddScoped<Provider2VehicleViolation>();
+        services.AddScoped<Provider3VehicleViolation>();
+        services.AddScoped<Provider4VehicleViolation>();
+        services.AddScoped<Provider5VehicleViolation>();
+
+
 
         return services;
     }

@@ -95,7 +95,10 @@ public class TrafficFineInquiry(
 
         // ========== ۴. اگر هیچ Provider موفق نبود ==========
         if (finalResult is null)
-            warnings.Add(new MessageItem(MessageItemContexts.Error, "هیچ ارائه‌دهنده‌ای پاسخ معتبر نداد", "ManagedTechnicalError"));
+        {
+            warnings.Add(new MessageItem(MessageItemContexts.Warning, "هیچ ارائه‌دهنده‌ای پاسخ معتبر نداد", "ManagedTechnicalError"));
+            throw ResponseHelper.Failure(StatusCodes.Status204NoContent, warnings.ToArray());
+        }
 
 
         if (warnings.Count > 0)
