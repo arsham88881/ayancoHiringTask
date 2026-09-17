@@ -7,8 +7,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Folder Include="Interfaces\Strategies\" />
-    <Folder Include="Models\Inquiry\" />
     <Folder Include="Models\Meta\" />
   </ItemGroup>
 
@@ -17,6 +15,8 @@
     <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.3.13" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Core" Version="2.3.13" />
     <PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.3" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+    <PackageReference Include="RestSharp" Version="114.0.0" />
   </ItemGroup>
 
 </Project>

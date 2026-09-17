@@ -1,5 +1,6 @@
 ﻿using Domain.Interfaces.Contexts;
-using Domain.Interfaces.Repositories;
+using Domain.Interfaces.Repositories.Audit;
+using Domain.Interfaces.Repositories.Inquriy;
 using Domain.Interfaces.Services;
 using Infrastructure.DataIo.Services;
 using Infrastructure.Persistence.Contexts;
@@ -24,6 +25,7 @@ public static class DependencyInjectionManager
 
         //repositories
         services.AddScoped<IAuditRepository, AuditRepository>();
+        services.AddScoped<IInquiryProviderRepository, InquiryProviderRepository>();
 
         return services;
     }

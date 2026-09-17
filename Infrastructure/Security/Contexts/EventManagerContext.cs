@@ -1,6 +1,6 @@
 ﻿using Domain.Attributes.Shared;
 using Domain.Interfaces.Contexts;
-using Domain.Interfaces.Repositories;
+using Domain.Interfaces.Repositories.Audit;
 using Domain.Interfaces.Services;
 using Domain.Models.Audit;
 using Microsoft.Extensions.DependencyInjection;

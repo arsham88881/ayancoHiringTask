@@ -10,9 +10,9 @@ public enum WebServices
     /// استعلام خلافی خودرو به صورت خلاصه 
     /// </summary>
     InquiryVehicleViolationSummery = 1,
-    /// <summary>
-    /// استعلام خلافی خودرو با جزئیات
-    /// </summary>
-    InquiryVehicleViolationWithDetail = 2
+    ///// <summary>
+    ///// استعلام خلافی خودرو با جزئیات
+    ///// </summary>
+    //InquiryVehicleViolationWithDetail = 2
 }
 

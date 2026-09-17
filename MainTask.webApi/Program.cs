@@ -14,6 +14,12 @@ builder.Services.AddDiApplication();
 builder.AddLoggingBuildConfigure();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddMemoryCache();
+
+builder.Services.AddControllers(options =>
+{
+    options.Filters.Add<IdempotentFilter>();
+});
 
 var app = builder.Build();
 app.AddLoggingRuntimeConfigure();

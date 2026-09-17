@@ -1,7 +1,7 @@
 ﻿using Application.Exceptions;
 using Dapper;
 using Domain.Interfaces.Contexts;
-using Domain.Interfaces.Repositories;
+using Domain.Interfaces.Repositories.Audit;
 using Domain.Models.Audit;
 using System.Data;
 using System.Data.Common;

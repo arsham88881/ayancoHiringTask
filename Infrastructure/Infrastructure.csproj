@@ -8,12 +8,13 @@
 
   <ItemGroup>
     <Folder Include="DataIo\Contexts\" />
-    <Folder Include="Integration\Factories\" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Dapper" Version="2.1.86" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.12" />
+    <PackageReference Include="Polly" Version="8.8.0" />
+    <PackageReference Include="RestSharp" Version="114.0.0" />
   </ItemGroup>
 
   <ItemGroup>
