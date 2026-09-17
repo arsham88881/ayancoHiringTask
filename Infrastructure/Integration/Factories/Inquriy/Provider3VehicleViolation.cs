@@ -34,10 +34,8 @@ public class Provider3VehicleViolation : IInquiryVehicleViolation
         VehicleViolationDto? mappedData = null;
 
         inputData = System.Text.Json.JsonSerializer.Serialize(request);
-
         var restRequest = new RestRequestDto
         {
-            EndPoint = "3/vehicle-violations/inquiry",
             BodyParams = request
         };
 

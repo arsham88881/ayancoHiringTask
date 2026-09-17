@@ -44,6 +44,7 @@ public class InquiryProviderService(
                 Id = p.Id,
                 WebServiceId = p.WebServiceId,
                 Address = p.Address,
+                EnKey = p.EnKey,
                 IsEnable = p.IsEnable,
                 CallingPriority = p.CallingPriority,
                 RequestMethod = p.RequestMethod,

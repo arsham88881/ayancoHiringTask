@@ -1,23 +1,20 @@
 ﻿using Application.Exceptions;
 using Domain.Interfaces.Contexts;
+using Domain.Models.Shared;
 using Microsoft.AspNetCore.Diagnostics;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using Serilog.Context;
 
 namespace MainTask.webApi.Middlewares;
 
+
 public class GlobalExceptionHandler : IExceptionHandler
 {
     private readonly ILogger<GlobalExceptionHandler> _logger;
-    private readonly IProblemDetailsService _problemDetailsService;
 
-    public GlobalExceptionHandler(
-        ILogger<GlobalExceptionHandler> logger,
-        IProblemDetailsService problemDetailsService)
+    public GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger)
     {
         _logger = logger;
-        _problemDetailsService = problemDetailsService;
     }
 
     public async ValueTask<bool> TryHandleAsync(
@@ -25,121 +22,134 @@ public class GlobalExceptionHandler : IExceptionHandler
         Exception exception,
         CancellationToken cancellationToken)
     {
-        // دریافت سرویس‌ها از DI
         var eventManager = httpContext.RequestServices.GetRequiredService<IEventManagerContext>();
         var uow = httpContext.RequestServices.GetRequiredService<IUnitOfWork>();
 
-        // ثبت EventId در لاگ
-        using (LogContext.PushProperty("FarnoorEventId", eventManager.EventGuid.ToString()))
+        using (LogContext.PushProperty("EventId", eventManager.EventGuid.ToString()))
         {
             _logger.LogInformation("Request came with eventId: {Id}", eventManager.EventGuid);
 
-            // مدیریت لغو درخواست توسط کاربر (Client Closed Request)
+            // ========== ۱. لغو توسط کاربر (Client Closed Request) ==========
             if (exception is OperationCanceledException && httpContext.RequestAborted.IsCancellationRequested)
             {
                 httpContext.Response.StatusCode = 499;
                 eventManager.WithDescription($"درخواست توسط کاربر کنسل شد. EventId: {eventManager.EventGuid}");
                 await RollbackTransactionAsync(uow);
+
+                await WriteApiResponseAsync(httpContext, new ApiResponse
+                {
+                    StatusCode = 499,
+                    TrackingId = eventManager.EventGuid.ToString(),
+                    Messages =
+                    [
+                        new MessageItem(MessageItemContexts.Error, "درخواست توسط کاربر لغو شد", "ClientClosedRequest")
+                    ]
+                }, cancellationToken);
+
                 _logger.LogWarning("Request ended with 499. EventId: {Id}", eventManager.EventGuid);
-                return true; // خطا مدیریت شد
+                return true;
             }
 
-            // مدیریت Timeout (اتمام زمان)
+            // ========== ۲. Timeout (اتمام زمان) ==========
             if (exception is OperationCanceledException && !httpContext.RequestAborted.IsCancellationRequested)
             {
                 eventManager.WithDescription("درخواست به علت اتمام زمان پاسخ کنسل شد.");
-                await Prepare408TimeoutAsync(httpContext, eventManager, cancellationToken);
                 await RollbackTransactionAsync(uow);
+
+                await WriteApiResponseAsync(httpContext, new ApiResponse
+                {
+                    StatusCode = StatusCodes.Status408RequestTimeout,
+                    TrackingId = eventManager.EventGuid.ToString(),
+                    Messages =
+                    [
+                        new MessageItem(MessageItemContexts.Error, "اتمام زمان درخواست (Timeout)", "RequestTimeout")
+                    ]
+                }, cancellationToken);
+
                 return true;
             }
 
             // ذخیره InnerException
             eventManager.InnerException = exception.InnerException ?? exception;
 
-            // بررسی Timeout دیتابیس
+            // ========== ۳. SQL Timeout ==========
             if (eventManager.InnerException is SqlException sqlEx && sqlEx.Number == -2)
             {
                 eventManager.WithDescription("درخواست به علت اتمام زمان پاسخ (SQL Timeout) کنسل شد.");
-                await Prepare408TimeoutAsync(httpContext, eventManager, cancellationToken);
+                await RollbackTransactionAsync(uow);
+
+                await WriteApiResponseAsync(httpContext, new ApiResponse
+                {
+                    StatusCode = StatusCodes.Status408RequestTimeout,
+                    TrackingId = eventManager.EventGuid.ToString(),
+                    Messages =
+                    [
+                        new MessageItem(MessageItemContexts.Error, "اتمام زمان درخواست دیتابیس (SQL Timeout)", "SqlTimeout")
+                    ]
+                }, cancellationToken);
+
                 return true;
             }
 
-            // تعیین StatusCode بر اساس نوع Exception
-            var statusCode = exception switch
+            // ========== ۴. تعیین StatusCode و پیام ==========
+            var (statusCode, messages) = exception switch
             {
-                InfrastructureException => StatusCodes.Status500InternalServerError,
-                BusinessException business => business.Result.StatusCode,
-                //BusinessException rolling => rolling.Result.StatusCode,
-                //ApiExceptionWithOut rolling => rolling.Result.StatusCode,
-                _ => StatusCodes.Status500InternalServerError
+                BusinessException business => (
+                    business.Result.StatusCode,
+                    business.Result.Messages ??
+                    [
+                        new MessageItem(MessageItemContexts.Error, "خطای کسب و کار", "BusinessError")
+                    ]
+                ),
+
+                InfrastructureException => (
+                    StatusCodes.Status500InternalServerError,
+                    new[]
+                    {
+                        new MessageItem(MessageItemContexts.Error, "خطای زیرساخت", "InfrastructureError")
+                    }
+                ),
+
+                _ => (
+                    StatusCodes.Status500InternalServerError,
+                    new[]
+                    {
+                        new MessageItem(MessageItemContexts.Error, "خطای ناشناخته رخ داده است", "UnhandledError")
+                    }
+                )
             };
 
-            // ساخت پاسخ ProblemDetails
-            var problemDetails = new ProblemDetails
-            {
-                Status = statusCode,
-                Title = "خطا در پردازش درخواست",
-                Detail = GetErrorMessage(exception),
-                Instance = httpContext.Request.Path
-            };
+            // ثبت توضیحات
+            eventManager.WithDescription($"خطا رخ داد: {messages.FirstOrDefault()?.Message}");
 
-            // افزودن TrackingId
-            problemDetails.Extensions["trackingId"] = eventManager.EventGuid.ToString();
-
-            // ثبت توضیحات در eventManager
-            eventManager.WithDescription($"خطا رخ داد: {problemDetails.Detail}");
-
-            // Rollback تراکنش
+            // Rollback
             await RollbackTransactionAsync(uow);
 
-            // نوشتن پاسخ با IProblemDetailsService
-            httpContext.Response.StatusCode = statusCode;
-            await _problemDetailsService.WriteAsync(new ProblemDetailsContext
+            // نوشتن پاسخ با مدل خودت
+            await WriteApiResponseAsync(httpContext, new ApiResponse
             {
-                HttpContext = httpContext,
-                ProblemDetails = problemDetails
-            });
+                StatusCode = statusCode,
+                TrackingId = eventManager.EventGuid.ToString(),
+                Messages = messages
+            }, cancellationToken);
 
-            _logger.LogError(exception, "Request ended with exception. EventId: {Id}, StatusCode: {StatusCode}",
+            _logger.LogError(exception,
+                "Request ended with exception. EventId: {Id}, StatusCode: {StatusCode}",
                 eventManager.EventGuid, statusCode);
 
-            return true; // خطا مدیریت شد
+            return true;
         }
     }
 
-    private static string GetErrorMessage(Exception exception)
-    {
-        return exception switch
-        {
-            InfrastructureException => "خطای زیر ساخت",
-            BusinessException => "خطای کسب و کار",
-            _ => "خطای ناشناخته"
-        };
-    }
-
-    private async Task Prepare408TimeoutAsync(
+    private static async Task WriteApiResponseAsync(
         HttpContext context,
-        IEventManagerContext eventManager,
+        ApiResponse response,
         CancellationToken cancellationToken)
     {
-        context.Response.StatusCode = StatusCodes.Status408RequestTimeout;
+        context.Response.StatusCode = response.StatusCode;
+        context.Response.ContentType = "application/json";
 
-        var problemDetails = new ProblemDetails
-        {
-            Status = StatusCodes.Status408RequestTimeout,
-            Title = "Request Timeout",
-            Detail = "اتمام درخواست",
-            Instance = context.Request.Path
-        };
-        problemDetails.Extensions["trackingId"] = eventManager.EventGuid.ToString();
-
-        await _problemDetailsService.WriteAsync(new ProblemDetailsContext
-        {
-            HttpContext = context,
-            ProblemDetails = problemDetails
-        });
-
-        _logger.LogWarning("Request ended with timeout. EventId: {Id}", eventManager.EventGuid);
+        await context.Response.WriteAsJsonAsync(response, cancellationToken);
     }
 
     private async Task RollbackTransactionAsync(IUnitOfWork uow)
@@ -162,5 +172,4 @@ public class GlobalExceptionHandler : IExceptionHandler
             }
         }
     }
-
 }

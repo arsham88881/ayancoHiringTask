@@ -35,11 +35,12 @@ public class Provider5VehicleViolation : IInquiryVehicleViolation
 
         inputData = System.Text.Json.JsonSerializer.Serialize(request);
 
+
         var restRequest = new RestRequestDto
         {
-            EndPoint = "1/vehicle-violations/inquiry",
             BodyParams = request
         };
+
 
         var options = new RestAdvanceOptions
         {

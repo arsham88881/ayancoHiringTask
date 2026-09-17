@@ -37,7 +37,6 @@ public class Provider1VehicleViolation : IInquiryVehicleViolation
 
         var restRequest = new RestRequestDto
         {
-            EndPoint = "1/vehicle-violations/inquiry",
             BodyParams = request
         };
 
