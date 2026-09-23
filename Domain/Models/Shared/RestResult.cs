@@ -102,13 +102,6 @@ public record class RestResult
     // Summary:
     //     Transport or another non-HTTP error generated while attempting request
     public string? ErrorMessage { get; set; }
-    /// <summary>
-    /// when set configlog == allExcution
-    /// </summary>
-    public string? RequestLogGuid { get; set; }
-
-
-    //public string? ExcutedCurl { get; set; }
     public string? FinalSendedUrl { get; set; }
     public RestResponseLogData? RestResponseLogData { get; set; }
 
@@ -182,4 +175,5 @@ public class RestResponseLogData
     public DateTime CompleteDate { get; set; }
     public int RetryAttempt { get; set; } = 0; // شماره تلاش
     public string? ExceptionType { get; set; } // نوع Exception در صورت وجود
+    public string? ExcutedCurl { get; set; }
 }

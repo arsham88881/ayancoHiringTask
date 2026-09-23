@@ -4,6 +4,7 @@ using Domain.Models.Shared;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Caching.Memory;
+using System.Collections.Concurrent;
 
 namespace MainTask.webApi.Middlewares;
 
@@ -11,6 +12,9 @@ public class IdempotentFilter : IAsyncActionFilter
 {
     private readonly IMemoryCache _cache;
     private readonly ILogger<IdempotentFilter> _logger;
+
+    // قفل‌های جداگانه برای هر Idempotency-Key
+    private static readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new();
 
     public IdempotentFilter(IMemoryCache cache, ILogger<IdempotentFilter> logger)
     {
@@ -20,7 +24,6 @@ public class IdempotentFilter : IAsyncActionFilter
 
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
-        // فقط برای متدهایی که Attribute دارند
         var attribute = context.ActionDescriptor.EndpointMetadata
             .OfType<IdempotentAttribute>()
             .FirstOrDefault();
@@ -34,42 +37,59 @@ public class IdempotentFilter : IAsyncActionFilter
         // خواندن کلید از Header
         if (!context.HttpContext.Request.Headers.TryGetValue("Idempotency-Key", out var idempotencyKey)
             || string.IsNullOrWhiteSpace(idempotencyKey))
-            throw ResponseHelper.Failure(StatusCodes.Status400BadRequest, [new MessageItem(MessageItemContexts.Error, "Header 'Idempotency-Key' is required.", "Idempotency-Key")]);
+        {
+            throw ResponseHelper.Failure(
+                StatusCodes.Status400BadRequest,
+                [new MessageItem(MessageItemContexts.Error, "Header 'Idempotency-Key' is required.", "Idempotency-Key")]);
+        }
 
         var cacheKey = $"Idempotent_{idempotencyKey}";
 
-        // اگر قبلاً این کلید دیده شده → نتیجه قبلی را برگردان
-        if (_cache.TryGetValue(cacheKey, out IdempotentResponse? cachedResponse) && cachedResponse is not null)
-        {
-            _logger.LogInformation("Idempotent hit for key: {Key}", idempotencyKey);
+        // گرفتن یا ساختن Semaphore برای این کلید
+        var semaphore = _locks.GetOrAdd(cacheKey, _ => new SemaphoreSlim(1, 1));
 
-            context.Result = new ObjectResult(cachedResponse.Value)
+        await semaphore.WaitAsync();
+        try
+        {
+            // Double-check: ممکن است در زمان انتظار برای قفل، نتیجه کش شده باشد
+            if (_cache.TryGetValue(cacheKey, out IdempotentResponse? cachedResponse) && cachedResponse is not null)
             {
-                StatusCode = cachedResponse.StatusCode
-            };
-            return;
+                _logger.LogInformation("Idempotent hit for key: {Key}", idempotencyKey!);
+
+                context.Result = new ObjectResult(cachedResponse.Value)
+                {
+                    StatusCode = cachedResponse.StatusCode
+                };
+                return;
+            }
+
+            // اجرای اکشن (فقط یک درخواست در آن واحد به اینجا می‌رسد)
+            var executedContext = await next();
+
+            // ذخیره نتیجه (فقط اگر ObjectResult بود)
+            if (executedContext.Result is ObjectResult objectResult)
+            {
+                var responseToCache = new IdempotentResponse
+                {
+                    StatusCode = objectResult.StatusCode ?? 200,
+                    Value = objectResult.Value
+                };
+
+                var cacheOptions = new MemoryCacheEntryOptions()
+                    .SetAbsoluteExpiration(TimeSpan.FromMinutes(attribute.CacheTimeInMinutes))
+                    .SetPriority(CacheItemPriority.Normal);
+
+                _cache.Set(cacheKey, responseToCache, cacheOptions);
+
+                _logger.LogInformation(
+                    "Idempotent result cached for key: {Key} (TTL: {Minutes} min)",
+                    idempotencyKey,
+                    attribute.CacheTimeInMinutes);
+            }
         }
-
-        // اجرای اکشن
-        var executedContext = await next();
-
-        // ذخیره نتیجه (فقط اگر موفق بود)
-        if (executedContext.Result is ObjectResult objectResult)
+        finally
         {
-            var responseToCache = new IdempotentResponse
-            {
-                StatusCode = objectResult.StatusCode ?? 200,
-                Value = objectResult.Value
-            };
-
-            var cacheOptions = new MemoryCacheEntryOptions()
-                .SetAbsoluteExpiration(TimeSpan.FromMinutes(attribute.CacheTimeInMinutes))
-                .SetPriority(CacheItemPriority.Normal);
-
-            _cache.Set(cacheKey, responseToCache, cacheOptions);
-
-            _logger.LogInformation("Idempotent result cached for key: {Key} (TTL: {Minutes} min)",
-                idempotencyKey, attribute.CacheTimeInMinutes);
+            semaphore.Release();
         }
     }
 

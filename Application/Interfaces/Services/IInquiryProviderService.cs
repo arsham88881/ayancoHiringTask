@@ -8,7 +8,9 @@ namespace Application.Interfaces.Services;
 
 public interface IInquiryProviderService
 {
-    Task<(bool ReadFromCache, InquiryProviderItemDto[] ProviderList)> GetActiveProvidersAsync(int webServiceId, bool ReadAgainFromSql = false, CancellationToken ct = default);
+    Task<(bool ReadFromCache, InquiryProviderItemDto[] ProviderList)> GetActiveProvidersAsync(int webServiceId, 
+        bool ReadAgainFromSql = false,
+        CancellationToken ct = default);
 }
 
 

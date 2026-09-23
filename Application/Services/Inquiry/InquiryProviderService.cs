@@ -1,6 +1,8 @@
 ﻿using Application.Dtos.Inquiry.InquiryProvider;
 using Application.Interfaces.Services;
 using Domain.Interfaces.Repositories.Inquriy;
+using Domain.Models.Shared;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 
@@ -52,6 +54,9 @@ public class InquiryProviderService(
                 ClosingDate = p.ClosingDate
             })
             .ToArray();
+
+        if (result is null || result.Length == 0)
+            throw ResponseHelper.Failure(StatusCodes.Status400BadRequest, [new MessageItem(MessageItemContexts.Error, "هیچ ارائه‌دهنده فعالی برای این سرویس یافت نشد.", "BusinessError")]);
 
         // کش کن برای ۵ دقیقه
         var cacheOptions = new MemoryCacheEntryOptions()

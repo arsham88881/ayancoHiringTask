@@ -35,6 +35,12 @@ public class EventManagerMiddleware
         logger.LogInformation("request com with this tracking Id {0}", eventManager.EventGuid.ToString());
         context.Request.EnableBuffering();
 
+        var originalResponseBody = context.Response.Body;
+
+        await using var responseBody = new MemoryStream();
+
+        context.Response.Body = responseBody;
+
         var SaveEventParam = new SaveEventInModel();
         try
         {
@@ -57,7 +63,7 @@ public class EventManagerMiddleware
 
             if (statusCode == StatusCodes.Status404NotFound)
             {
-                SaveEventParam.InputData = await ReadRequestBodyAsync(context.Request.Body);
+                SaveEventParam.InputData = await ReadRequestBodyAsync(context.Request);
 
                 var apiResponse = new ApiResponse(statusCode, [new MessageItem(MessageItemContexts.Error
                     , "خطای درخواست", "منبع درخواستی یافت نشد")])
@@ -69,8 +75,15 @@ public class EventManagerMiddleware
             }
 
 
-            var endpoint = context!.GetEndpoint();
-            var routePattern = ((RouteEndpoint)endpoint!).RoutePattern.RawText;
+            var endpoint = context.GetEndpoint();
+
+            var routePattern = endpoint switch
+            {
+                RouteEndpoint routeEndpoint =>
+                    routeEndpoint.RoutePattern.RawText,
+
+                _ => context.Request.Path.Value
+            };
 
             SaveEventParam.Source = string.Join("-", routeMothod, routePattern);
 
@@ -80,16 +93,24 @@ public class EventManagerMiddleware
                 var apiResponse = new ApiResponse(statusCode, [new MessageItem(MessageItemContexts.Error
                     , "خطای درخواست", "عملیات مجاز نمی باشد")])
                 { TrackingId = eventManager.EventGuid.ToString() };
-                SaveEventParam.InputData = await ReadRequestBodyAsync(context.Request.Body);
+                SaveEventParam.InputData = await ReadRequestBodyAsync(context.Request);
                 SaveEventParam.OutputData = JsonSerializer.Serialize(apiResponse, SerializationOptions);
 
                 throw ResponseHelper.Failure(apiResponse);
             }
 
-            SaveEventParam.InputData = await ReadRequestBodyAsync(context.Request.Body);
-            context.Response.Body.Seek(0, SeekOrigin.Begin);
-            SaveEventParam.OutputData = await new StreamReader(context.Response.Body).ReadToEndAsync();
-            context.Response.Body.Seek(0, SeekOrigin.Begin);
+            SaveEventParam.InputData = await ReadRequestBodyAsync(context.Request);
+            responseBody.Position = 0;
+            using var reader = new StreamReader(
+                responseBody,
+                Encoding.UTF8,
+                detectEncodingFromByteOrderMarks: false,
+                leaveOpen: true);
+
+            SaveEventParam.OutputData = await reader.ReadToEndAsync();
+            responseBody.Position = 0;
+
+            await responseBody.CopyToAsync(originalResponseBody);
 
             await eventManager.SaveEventLog(SaveEventParam);
         }
@@ -121,12 +142,38 @@ public class EventManagerMiddleware
 
         return context.Connection.RemoteIpAddress?.ToString() ?? "Unknown";
     }
-    private async Task<string?> ReadRequestBodyAsync(Stream body)
+    //private async Task<string?> ReadRequestBodyAsync(Stream body)
+    //{
+    //    body.Seek(0, SeekOrigin.Begin);
+    //    using var reader = new StreamReader(body, leaveOpen: true);
+    //    var bodyAsText = await reader.ReadToEndAsync();
+    //    body.Seek(0, SeekOrigin.End);
+    //    return string.IsNullOrEmpty(bodyAsText) || bodyAsText == "{}" ? null : bodyAsText;
+    //}
+    private async Task<string?> ReadRequestBodyAsync(HttpRequest request)
     {
-        body.Seek(0, SeekOrigin.Begin);
-        using var reader = new StreamReader(body, leaveOpen: true);
-        var bodyAsText = await reader.ReadToEndAsync();
-        body.Seek(0, SeekOrigin.End);
-        return string.IsNullOrEmpty(bodyAsText) || bodyAsText == "{}" ? null : bodyAsText;
+        if (!request.Body.CanSeek)
+            return null;
+
+        request.Body.Position = 0;
+
+        try
+        {
+            using var reader = new StreamReader(
+                request.Body,
+                Encoding.UTF8,
+                detectEncodingFromByteOrderMarks: false,
+                leaveOpen: true);
+
+            var body = await reader.ReadToEndAsync();
+
+            return string.IsNullOrWhiteSpace(body) || body == "{}"
+                ? null
+                : body;
+        }
+        finally
+        {
+            request.Body.Position = 0;
+        }
     }
 }

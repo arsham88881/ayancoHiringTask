@@ -1,8 +1,11 @@
-﻿using Domain.Interfaces.Contexts;
+﻿using Application.Exceptions;
+using Domain.Interfaces.Contexts;
 using Domain.Models.Shared;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 using Polly;
 using RestSharp;
+using System.Text;
 
 namespace Infrastructure.Integration.Contexts;
 
@@ -58,14 +61,13 @@ internal class HttpIntegrationContext : IHttpIntegrationContext
     private async Task<RestResult<OUTPUT>> ExecuteAsync<OUTPUT>(
         Method requestMethod,
         string baseUrlAddress,
-        //bool isKeyUrlAddress,
         RestRequestDto request,
         RestAdvanceOptions? options,
         CancellationToken cancellationToken = default)
     {
         HttpClient httpClient = new HttpClient();
         var rqst = new RestRequest();
-        var guidRequest = Guid.NewGuid().ToString();
+        //var guidRequest = Guid.NewGuid().ToString();
         var restClient = new RestClient();
         string? excutedCurl = string.Empty;
         var responseModel = new RestResponseLogData();
@@ -104,12 +106,12 @@ internal class HttpIntegrationContext : IHttpIntegrationContext
             if (request.QuaryParams is not null)
                 AddQuary(rqst, request.QuaryParams);
 
-            //excutedCurl = ExcutionCurlCreator(restClient, rqst, options, request);
+            excutedCurl = ExcutionCurlCreator(restClient, rqst, options, request);
 
             RestResult<OUTPUT> response;
             var overallStartDate = DateTime.UtcNow;
 
-            if (options.RetryCount is not null && options.RetryCount > 0)
+            if (options.RetryCount is not null && options.RetryCount >= 1)
             {
                 // ساخت Retry Policy برای Generic
                 var retryPolicy = Policy<RestResult<OUTPUT>>
@@ -164,6 +166,7 @@ internal class HttpIntegrationContext : IHttpIntegrationContext
                     PeriodTime = (int)finalElapsed.TotalMilliseconds,
                     StartDate = overallStartDate,
                     CompleteDate = DateTime.UtcNow,
+                    ExcutedCurl = excutedCurl,
                     RetryAttempt = retryAttemptCounter + 1
                 };
             }
@@ -181,6 +184,7 @@ internal class HttpIntegrationContext : IHttpIntegrationContext
                     PeriodTime = (int)elapsed.TotalMilliseconds,
                     StartDate = startDate,
                     CompleteDate = DateTime.UtcNow,
+                    ExcutedCurl = excutedCurl,
                     RetryAttempt = 1
                 };
             }
@@ -188,7 +192,7 @@ internal class HttpIntegrationContext : IHttpIntegrationContext
             var finalUrl = restClient.BuildUri(rqst).ToString();
             logger.LogInformation($"Request sent successfully to: {finalUrl}");
 
-            response = response with { RequestLogGuid = guidRequest, FinalSendedUrl = finalUrl, RestResponseLogData = responseModel };
+            response = response with { FinalSendedUrl = finalUrl, RestResponseLogData = responseModel };
 
 
 
@@ -204,7 +208,7 @@ internal class HttpIntegrationContext : IHttpIntegrationContext
             var finalUrl = restClient.BuildUri(rqst).ToString();
             logger.LogError(ex, "Error in RestService for URL: {Url} with curl: {Curl}", finalUrl, excutedCurl ?? "");
 
-            throw;
+            throw new InfrastructureException(ex, "خطا ی سرویس ارسال درخواست");
         }
         finally
         {
@@ -221,7 +225,7 @@ internal class HttpIntegrationContext : IHttpIntegrationContext
     {
         HttpClient httpClient = new HttpClient();
         var rqst = new RestRequest();
-        var guidRequest = Guid.NewGuid().ToString();
+        //var guidRequest = Guid.NewGuid().ToString();
         var restClient = new RestClient();
         string? excutedCurl = string.Empty;
         var responseModel = new RestResponseLogData();
@@ -230,9 +234,6 @@ internal class HttpIntegrationContext : IHttpIntegrationContext
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            //if (isKeyUrlAddress)
-            //    httpClient = httpClientFactory.CreateClient(urlAddressKey);
-            //else
             httpClient.BaseAddress = new Uri(baseUrlAddress);
 
             options = options ?? new RestAdvanceOptions();
@@ -241,9 +242,6 @@ internal class HttpIntegrationContext : IHttpIntegrationContext
                 RemoteCertificateValidationCallback = (sender, certificate, chain, sslPolicyErrors) => options.DisableSsl
             };
 
-            //if (options.LogConfig != ExcutionLogConfig.None && request.EventManager is null)
-            //    throw ResponseHandler.Failure(StatusCodes.Status500InternalServerError, [new ErrorItem("DeveloperError",
-            //        "When You Want Save Log on Errors Or All Sended request from Ingration you need pass   EventManagerService from RequestDto")]);
 
             restClient = new RestClient(httpClient, restOptions);
             rqst = new RestRequest(request.EndPoint, requestMethod);
@@ -267,12 +265,12 @@ internal class HttpIntegrationContext : IHttpIntegrationContext
             if (request.QuaryParams is not null)
                 AddQuary(rqst, request.QuaryParams);
 
-            //excutedCurl = ExcutionCurlCreator(restClient, rqst, options, request);
+            excutedCurl = ExcutionCurlCreator(restClient, rqst, options, request);
 
             RestResult response;
             var overallStartDate = DateTime.UtcNow;
 
-            if (options.RetryCount is not null && options.RetryCount > 0)
+            if (options.RetryCount is not null && options.RetryCount >= 1)
             {
                 // ساخت Retry Policy
                 var retryPolicy = Policy<RestResult>
@@ -326,6 +324,7 @@ internal class HttpIntegrationContext : IHttpIntegrationContext
                     PeriodTime = (int)finalElapsed.TotalMilliseconds,
                     StartDate = overallStartDate,
                     CompleteDate = DateTime.UtcNow,
+                    ExcutedCurl = excutedCurl,
                     RetryAttempt = retryAttemptCounter + 1
                 };
             }
@@ -341,6 +340,7 @@ internal class HttpIntegrationContext : IHttpIntegrationContext
                     Response = (response.Content ?? "") + (response.ErrorMessage ?? ""),
                     PeriodTime = (int)elapsed.TotalMilliseconds,
                     StartDate = overallStartDate,
+                    ExcutedCurl = excutedCurl,
                     CompleteDate = DateTime.UtcNow,
                     RetryAttempt = 1
                 };
@@ -349,7 +349,11 @@ internal class HttpIntegrationContext : IHttpIntegrationContext
             var finalUrl = restClient.BuildUri(rqst).ToString();
             logger.LogInformation($"Request sent successfully to: {finalUrl}");
 
-            response = response with { RequestLogGuid = guidRequest, FinalSendedUrl = finalUrl, RestResponseLogData = responseModel };
+            response = response with
+            {
+                FinalSendedUrl = finalUrl,
+                RestResponseLogData = responseModel
+            };
 
 
             return response;
@@ -362,7 +366,7 @@ internal class HttpIntegrationContext : IHttpIntegrationContext
             var finalUrl = restClient.BuildUri(rqst).ToString();
             logger.LogError(ex, "Error in RestService for URL: {Url} with curl: {Curl}", finalUrl, excutedCurl ?? "");
 
-            throw;
+            throw new InfrastructureException(ex, "خطا ی سرویس ارسال درخواست");
         }
         finally
         {
@@ -371,7 +375,62 @@ internal class HttpIntegrationContext : IHttpIntegrationContext
             httpClient?.Dispose();
         }
     }
+    private string ExcutionCurlCreator(RestClient client, RestRequest request, RestAdvanceOptions options, RestRequestDto requestDto)
+    {
+        var finalUrl = client.BuildUri(request).ToString();
+        var curlBuilder = new StringBuilder();
 
+        // تخمین ظرفیت اولیه برای جلوگیری از reallocation
+        // URL + method + headers + body (تقریبی)
+        int estimatedCapacity = 256 + (request.Parameters.Count * 64);
+        if (requestDto.BodyParams != null)
+            estimatedCapacity += 1024;
+
+        var optimizedBuilder = new StringBuilder(estimatedCapacity);
+
+        optimizedBuilder.Append("curl --location '")
+                       .Append(finalUrl)
+                       .Append("' \\\n    --request ")
+                       .Append(request.Method.ToString().ToUpper());
+
+        var headers = request.Parameters.Where(p => p.Type == ParameterType.HttpHeader).ToList();
+
+        for (int i = 0; i < headers.Count; i++)
+        {
+            var header = headers[i];
+            optimizedBuilder.Append(" \\\n    --header '")
+                           .Append(header.Name)
+                           .Append(": ")
+                           .Append(header.Value?.ToString() ?? "")
+                           .Append("'");
+        }
+
+
+        if (!headers.Any(h => h.Name?.Equals("Content-Type", StringComparison.OrdinalIgnoreCase) == true) &&
+            requestDto.BodyParams != null)
+            optimizedBuilder.Append(" \\\n    --header 'Content-Type: application/json'");
+
+        if (requestDto.BodyParams != null &&
+            !new[] { Method.Get, Method.Delete }.Contains(request.Method))
+        {
+            var jsonBody = JsonConvert.SerializeObject(requestDto.BodyParams, Formatting.None);
+
+            if (jsonBody.Contains("'"))
+                jsonBody = jsonBody.Replace("'", "'\"'\"'");
+
+            optimizedBuilder.Append(" \\\n    --data '")
+                           .Append(jsonBody)
+                           .Append("'");
+        }
+
+        if (options.DisableSsl)
+            optimizedBuilder.Append(" \\\n    --insecure");
+
+        optimizedBuilder.Append(" \\\n    --max-time ")
+                       .Append(options.TimeoutConfig);
+
+        return optimizedBuilder.ToString();
+    }
     private void AddSegment(RestRequest request, object prms)
     {
         var propertyList = prms.GetType().GetProperties();

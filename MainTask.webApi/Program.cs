@@ -32,7 +32,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
+app.UseRouting();
+///request com from
 app.UseMiddleware<EventManagerMiddleware>();
 app.UseExceptionHandler();
 

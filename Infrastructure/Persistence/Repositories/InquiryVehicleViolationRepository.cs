@@ -28,6 +28,7 @@ public class InquiryVehicleViolationRepository(IUnitOfWork uow) : IInquiryVehicl
                 model.CompletedDate,
                 model.Duration,
                 model.InquiryTypeId,
+                
 
                 model.ApplicantId,
                 model.PlateNumber,

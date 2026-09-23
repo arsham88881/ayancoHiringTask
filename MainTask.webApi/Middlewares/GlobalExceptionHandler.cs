@@ -25,9 +25,24 @@ public class GlobalExceptionHandler : IExceptionHandler
         var eventManager = httpContext.RequestServices.GetRequiredService<IEventManagerContext>();
         var uow = httpContext.RequestServices.GetRequiredService<IUnitOfWork>();
 
+        _logger.LogError(
+            exception,
+            """
+            GLOBAL EXCEPTION HANDLER
+            Type: {ExceptionType}
+            FullType: {FullExceptionType}
+            Message: {Message}
+            InnerType: {InnerType}
+            InnerMessage: {InnerMessage}
+            """,
+            exception.GetType().Name,
+            exception.GetType().FullName,
+            exception.Message,
+            exception.InnerException?.GetType().Name,
+            exception.InnerException?.Message);
+
         using (LogContext.PushProperty("EventId", eventManager.EventGuid.ToString()))
         {
-            _logger.LogInformation("Request came with eventId: {Id}", eventManager.EventGuid);
 
             // ========== ۱. لغو توسط کاربر (Client Closed Request) ==========
             if (exception is OperationCanceledException && httpContext.RequestAborted.IsCancellationRequested)
@@ -98,15 +113,15 @@ public class GlobalExceptionHandler : IExceptionHandler
                     business.Result.StatusCode,
                     business.Result.Messages ??
                     [
-                        new MessageItem(MessageItemContexts.Error, "خطای کسب و کار", "BusinessError")
+                        new MessageItem(MessageItemContexts.Error, business.Message ?? "خطای کسب و کار", "BusinessError")
                     ]
                 ),
 
-                InfrastructureException => (
+                InfrastructureException infrastructure => (
                     StatusCodes.Status500InternalServerError,
                     new[]
                     {
-                        new MessageItem(MessageItemContexts.Error, "خطای زیرساخت", "InfrastructureError")
+                        new MessageItem(MessageItemContexts.Error, infrastructure.Message ?? "خطای زیرساخت", "InfrastructureError")
                     }
                 ),
 

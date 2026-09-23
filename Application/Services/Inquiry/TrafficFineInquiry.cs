@@ -49,9 +49,6 @@ public class TrafficFineInquiry(
               model.ForceRefresh,
               ct);
 
-        if (providers is null || providers.Length == 0)
-            throw ResponseHelper.Failure(StatusCodes.Status400BadRequest, [new MessageItem(MessageItemContexts.Error, "هیچ ارائه‌دهنده فعالی برای این سرویس یافت نشد.", "BusinessError")]);
-
         // مرتب‌سازی بر اساس اولویت (CallingPriority)
         var orderedProviders = providers.OrderBy(x => x.CallingPriority).ToArray();
 
@@ -130,38 +127,30 @@ public class TrafficFineInquiry(
        List<InquiryAttemptLogDto> attemptLogs,
        CancellationToken ct)
     {
-        try
+        var now = DateTime.UtcNow;
+        var saveModel = new VehicleViolationInModel
         {
-            var now = DateTime.UtcNow;
+            // Header
+            InquiryStatusId = (byte)(result.Status ?? InquiryStatus.ManagedTechnicalError),
+            CreatedBy = UserId,
+            CreateDate = now,
+            CompletedDate = now,
+            Duration = attemptLogs.Sum(x => x.Duration),
+            InquiryTypeId = (short)WebServices.InquiryVehicleViolationSummery,
 
-            var saveModel = new VehicleViolationInModel
-            {
-                // Header
-                InquiryStatusId = (byte)(result.Status ?? InquiryStatus.ManagedTechnicalError),
-                CreatedBy = UserId,
-                CreateDate = now,
-                CompletedDate = now,
-                Duration = attemptLogs.Sum(x => x.Duration),
-                InquiryTypeId = (short)WebServices.InquiryVehicleViolationSummery,
+            // Detail
+            ApplicantId = UserId,
+            PlateNumber = model.PlateNumber ?? string.Empty,
+            TotalAmount = result.Data?.TotalAmount,
+            BillId = result.Data?.BillId,
+            PaymentId = result.Data?.Paymentld,
+            Count = (short?)attemptLogs.Count,
 
-                // Detail
-                ApplicantId = UserId,
-                PlateNumber = model.PlateNumber ?? string.Empty,
-                TotalAmount = result.Data?.TotalAmount,
-                BillId = result.Data?.BillId,
-                PaymentId = result.Data?.Paymentld,
-                Count = (short?)result.Data?.Count,
+            // Attempt Logs
+            AttemptLogs = attemptLogs
+        };
 
-                // Attempt Logs
-                AttemptLogs = attemptLogs
-            };
-
-            await inquiryRepository.SaveInquiryAsync(saveModel);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to save inquiry + attempts for Plate: {Plate}", model.PlateNumber);
-        }
+        await inquiryRepository.SaveInquiryAsync(saveModel);
     }
 
 

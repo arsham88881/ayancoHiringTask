@@ -12,4 +12,5 @@ public class InquiryAttemptLogDto
     public string? OutputData { get; set; }
     public InquiryStatus Status { get; set; }
     public string? Message { get; set; }
+    public string? ExcutedCurl { get; set; }
 }
